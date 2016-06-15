@@ -37,6 +37,8 @@ module.exports = class CoursesView extends RootView
 
   initialize: ->
     @classCodeQueryVar = utils.getQueryVariable('_cc', false)
+    unless me.isStudent() or (@classCodeQueryVar and not me.isTeacher())
+      @onClassLoadError()
     @courseInstances = new CocoCollection([], { url: "/db/user/#{me.id}/course_instances", model: CourseInstance})
     @courseInstances.comparator = (ci) -> return ci.get('classroomID') + ci.get('courseID')
     @listenToOnce @courseInstances, 'sync', @onCourseInstancesLoaded
@@ -135,11 +137,19 @@ module.exports = class CoursesView extends RootView
     else
       modal = new JoinClassModal({ @classCode })
       @openModalView modal
+      @listenTo modal, 'error', @onClassLoadError
       @listenTo modal, 'join:success', @onJoinClassroomSuccess
       @listenTo modal, 'join:error', @onJoinClassroomError
+      @listenToOnce modal, 'hidden', ->
+        unless me.isStudent()
+          @onClassLoadError()
       @listenTo modal, 'hidden', ->
         @state = null
         @renderSelectors '#join-class-form'
+
+  # Super hacky way to patch users being able to join class while hiding /courses from others
+  onClassLoadError: ->
+    application.router.routeDirectly('courses/RestrictedToStudentsView')
 
   onJoinClassroomError: (classroom, jqxhr, options) ->
     @state = null
